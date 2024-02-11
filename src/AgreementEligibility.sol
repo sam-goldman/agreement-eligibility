@@ -131,7 +131,7 @@ contract AgreementEligibility is HatsEligibilityModule {
    *     - caller does not already wear the hat, and
    *     - caller is not in bad standing for the hat.
    */
-  function signAgreementAndClaimHat(address claimsHatter) public {
+  function signAgreementAndClaimHat() public {
     uint256 agreementId = currentAgreementId; // save SLOADs
 
     // we need to set the claimer's agreement before minting so that they are eligible for the hat on minting
@@ -143,7 +143,7 @@ contract AgreementEligibility is HatsEligibilityModule {
      *       - is currently wearing the hat, or
      *       - is in bad standing for the hat
      */
-    MultiClaimsHatter(claimsHatter).claimHatFor(hatId(), msg.sender);
+    MultiClaimsHatter(CLAIMS_HATTER()).claimHatFor(hatId(), msg.sender);
 
     emit AgreementEligibility_HatClaimedWithAgreement(msg.sender, hatId(), currentAgreement);
   }
