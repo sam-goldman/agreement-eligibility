@@ -9,3 +9,4 @@ solady/=lib/hats-module/lib/solady/src/
 solbase/=lib/hats-module/lib/hats-protocol/lib/solbase/src/
 solmate/=lib/hats-module/lib/solady/lib/solmate/src/
 utils/=lib/hats-module/lib/hats-protocol/lib/utils/
+multi-claims-hatter/=lib/multi-claims-hatter/src/

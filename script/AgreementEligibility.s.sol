@@ -2,7 +2,7 @@
 pragma solidity ^0.8.18;
 
 import { Script, console2 } from "forge-std/Script.sol";
-import { AgreementClaimsHatter } from "../src/AgreementEligibility.sol";
+import { AgreementEligibility } from "../src/AgreementEligibility.sol";
 
 contract Deploy is Script {
   address public implementation;
@@ -23,7 +23,7 @@ contract Deploy is Script {
     address deployer = vm.rememberKey(privKey);
     vm.startBroadcast(deployer);
 
-    implementation = address(new AgreementClaimsHatter{ salt: SALT }(version));
+    implementation = address(new AgreementEligibility{ salt: SALT }(version));
 
     vm.stopBroadcast();
 

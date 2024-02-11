@@ -3,41 +3,34 @@ pragma solidity ^0.8.19;
 
 // import { console2 } from "forge-std/Test.sol"; // remove before deploy
 import { HatsEligibilityModule, HatsModule, IHatsEligibility } from "hats-module/HatsEligibilityModule.sol";
+import { MultiClaimsHatter } from "multi-claims-hatter/MultiClaimsHatter.sol";
 
 /*//////////////////////////////////////////////////////////////
                             CUSTOM ERRORS
 //////////////////////////////////////////////////////////////*/
 
 /// @dev Thrown when the caller does not wear the `OWNER_HAT`
-error AgreementClaimsHatter_NotOwner();
+error AgreementEligibility_NotOwner();
 /// @dev Thrown when the caller does not wear the `ARBITRATOR_HAT`
-error AgreementClaimsHatter_NotArbitrator();
-/// @dev Thrown when the new grace period is shorter than `MIN_GRACE`
-error AgreementClaimsHatter_GraceTooShort();
-/// @dev Thrown when the new grace period would end prior to `graceEndsAt`
-error AgreementClaimsHatter_GraceNotOver();
-/// @dev Thrown when attempting to sign (w/o claiming) the current `agreement` without having already claimed the hat
-error AgreementClaimsHatter_HatNotClaimed();
-/// @dev Thrown when the caller has already signed the current `agreement`
-error AgreementClaimsHatter_AlreadySigned();
+error AgreementEligibility_NotArbitrator();
 
 /**
- * @title AgreementClaimsHatter
+ * @title AgreementEligibility
  * @author spengrah
  * @author Haberdasher Labs
  * @notice A Hats Protocol module enabling individuals to permissionlessly claim a hat by signing an agreement
  */
-contract AgreementClaimsHatter is HatsEligibilityModule {
+contract AgreementEligibility is HatsEligibilityModule {
   /*//////////////////////////////////////////////////////////////
                               EVENTS
   //////////////////////////////////////////////////////////////*/
 
   /// @dev Emitted when a user "signs" the `agreement` and claims the hat
-  event AgreementClaimsHatter_HatClaimedWithAgreement(address claimer, uint256 hatId, string agreement);
+  event AgreementEligibility_HatClaimedWithAgreement(address claimer, uint256 hatId, string agreement);
   /// @dev Emitted when a user "signs" the `agreement` without claiming the hat
-  event AgreementClaimsHatter_AgreementSigned(address signer, string agreement);
+  event AgreementEligibility_AgreementSigned(address signer, string agreement);
   /// @dev Emitted when a new `agreement` is set
-  event AgreementClaimsHatter_AgreementSet(string agreement, uint256 grace);
+  event AgreementEligibility_AgreementSet(string agreement, uint256 grace);
 
   /*//////////////////////////////////////////////////////////////
                               CONSTANTS
@@ -63,7 +56,7 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
    * 40      | hatId               | uint256   | 32     | HatsModule         |
    * 72      | OWNER_HAT           | uint256   | 32     | this               |
    * 104     | ARBITRATOR_HAT      | uint256   | 32     | this               |
-   * 136     | MIN_GRACE           | uint256   | 32     | this               |
+   * 136     | CLAIMS_HATTER       | address   | 20     | this               |
    * ------------------------------------------------------------------------+
    */
 
@@ -77,9 +70,9 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
     return _getArgUint256(104);
   }
 
-  /// @notice The minimum grace period for a new agreement
-  function MIN_GRACE() public pure returns (uint256) {
-    return _getArgUint256(136);
+  /// @notice The address of the claims hatter instance
+  function CLAIMS_HATTER() public pure returns (address) {
+    return _getArgAddress(136);
   }
 
   /*//////////////////////////////////////////////////////////////
@@ -120,15 +113,11 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
   /// @inheritdoc HatsModule
   function _setUp(bytes calldata _initData) internal override {
     // decode init data
-    (string memory agreement, uint256 _grace) = abi.decode(_initData, (string, uint256));
+    (string memory agreement) = abi.decode(_initData, (string));
 
     // set the initial agreement
     currentAgreement = agreement;
     ++currentAgreementId;
-
-    // grace period must be at least `MIN_GRACE`
-    if (_grace < MIN_GRACE()) revert AgreementClaimsHatter_GraceTooShort();
-    graceEndsAt = block.timestamp + _grace;
   }
 
   /*//////////////////////////////////////////////////////////////
@@ -137,11 +126,12 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
 
   /**
    * @notice Claim the `hatId` hat and sign the current agreement
-   * @dev Mints the hat to the caller if they...
-   *     - do already wear the hat, and
-   *     - are not in bad standing for the hat.
+   * @dev Mints the hat to the caller if:
+   *     - the hat is "claimable-for" with the provided claims hatter instance, and
+   *     - caller does not already wear the hat, and
+   *     - caller is not in bad standing for the hat.
    */
-  function claimHatWithAgreement() public {
+  function signAgreementAndClaimHat(address claimsHatter) public {
     uint256 agreementId = currentAgreementId; // save SLOADs
 
     // we need to set the claimer's agreement before minting so that they are eligible for the hat on minting
@@ -149,29 +139,24 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
 
     /**
      * @dev this call will revert if msg.sender...
+     *       - the hat is not "claimable-for"
      *       - is currently wearing the hat, or
      *       - is in bad standing for the hat
      */
-    HATS().mintHat(hatId(), msg.sender);
+    MultiClaimsHatter(claimsHatter).claimHatFor(hatId(), msg.sender);
 
-    emit AgreementClaimsHatter_HatClaimedWithAgreement(msg.sender, hatId(), currentAgreement);
+    emit AgreementEligibility_HatClaimedWithAgreement(msg.sender, hatId(), currentAgreement);
   }
 
   /**
-   * @notice Sign the current agreement without claiming the hat. For users who have signed a previous agreement.
-   * @dev Reverts if the caller has not already claimed the hat or has already signed the current agreement.
+   * @notice Sign the current agreement without claiming the hat.
    */
   function signAgreement() public {
     uint256 agreementId = currentAgreementId; // save SLOADs
-    uint256 claimerAgreementId = claimerAgreements[msg.sender]; // save SLOADs
-
-    if (claimerAgreementId == 0) revert AgreementClaimsHatter_HatNotClaimed();
-
-    if (claimerAgreementId == agreementId) revert AgreementClaimsHatter_AlreadySigned();
 
     claimerAgreements[msg.sender] = agreementId;
 
-    emit AgreementClaimsHatter_AgreementSigned(msg.sender, currentAgreement);
+    emit AgreementEligibility_AgreementSigned(msg.sender, currentAgreement);
   }
 
   /*//////////////////////////////////////////////////////////////
@@ -199,7 +184,7 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
         eligible = true;
         // if we are in a grace period and they have signed the previous agreement
         /// @dev agreementId is always > 0 after initialization, so this subtraction is safe
-      } else if (block.timestamp < graceEndsAt && claimerAgreementId == agreementId - 1 && claimerAgreementId > 0) {
+      } else if (block.timestamp < graceEndsAt && claimerAgreementId == agreementId - 1) {
         eligible = true;
       }
     }
@@ -218,15 +203,11 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
   function setAgreement(string calldata _agreement, uint256 _grace) public onlyOwner {
     uint256 _graceEndsAt = block.timestamp + _grace;
 
-    if (_grace < MIN_GRACE()) revert AgreementClaimsHatter_GraceTooShort();
-    // new grace period must end after the current grace period
-    if (_graceEndsAt < graceEndsAt) revert AgreementClaimsHatter_GraceNotOver();
-
     graceEndsAt = _graceEndsAt;
     currentAgreement = _agreement;
     ++currentAgreementId;
 
-    emit AgreementClaimsHatter_AgreementSet(_agreement, _graceEndsAt);
+    emit AgreementEligibility_AgreementSet(_agreement, _graceEndsAt);
   }
 
   /**
@@ -279,13 +260,13 @@ contract AgreementClaimsHatter is HatsEligibilityModule {
 
   /// @notice Reverts if the caller is not wearing the OWNER_HAT.
   modifier onlyOwner() {
-    if (!HATS().isWearerOfHat(msg.sender, OWNER_HAT())) revert AgreementClaimsHatter_NotOwner();
+    if (!HATS().isWearerOfHat(msg.sender, OWNER_HAT())) revert AgreementEligibility_NotOwner();
     _;
   }
 
   /// @notice Reverts if the caller is not wearing the ARBITRATOR_HAT.
   modifier onlyArbitrator() {
-    if (!HATS().isWearerOfHat(msg.sender, ARBITRATOR_HAT())) revert AgreementClaimsHatter_NotArbitrator();
+    if (!HATS().isWearerOfHat(msg.sender, ARBITRATOR_HAT())) revert AgreementEligibility_NotArbitrator();
     _;
   }
 }
