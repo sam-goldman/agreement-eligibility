@@ -10,7 +10,7 @@ contract Deploy is Script {
 
   // default values
   bool private verbose = true;
-  string private version = "0.2.0"; // increment with each deployment
+  string private version = "0.1.0"; // increment with each deployment
 
   /// @notice Override default values, if desired
   function prepare(bool _verbose, string memory _version) public {

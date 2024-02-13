@@ -16,7 +16,6 @@ error AgreementEligibility_NotArbitrator();
 
 /**
  * @title AgreementEligibility
- * @author spengrah
  * @author Haberdasher Labs
  * @notice A Hats Protocol module enabling individuals to permissionlessly claim a hat by signing an agreement
  */
@@ -56,7 +55,6 @@ contract AgreementEligibility is HatsEligibilityModule {
    * 40      | hatId               | uint256   | 32     | HatsModule         |
    * 72      | OWNER_HAT           | uint256   | 32     | this               |
    * 104     | ARBITRATOR_HAT      | uint256   | 32     | this               |
-   * 136     | CLAIMS_HATTER       | address   | 20     | this               |
    * ------------------------------------------------------------------------+
    */
 
@@ -68,11 +66,6 @@ contract AgreementEligibility is HatsEligibilityModule {
   /// @notice The id of the hat whose wearer serves as the arbitrator for this contract
   function ARBITRATOR_HAT() public pure returns (uint256) {
     return _getArgUint256(104);
-  }
-
-  /// @notice The address of the claims hatter instance
-  function CLAIMS_HATTER() public pure returns (address) {
-    return _getArgAddress(136);
   }
 
   /*//////////////////////////////////////////////////////////////
@@ -125,25 +118,26 @@ contract AgreementEligibility is HatsEligibilityModule {
   //////////////////////////////////////////////////////////////*/
 
   /**
-   * @notice Claim the `hatId` hat and sign the current agreement
+   * @notice Sign the current agreement and claim the hat
+   * @param _claimsHatter a Multi Claims Hatter instance with which to perform claiming
    * @dev Mints the hat to the caller if:
    *     - the hat is "claimable-for" with the provided claims hatter instance, and
    *     - caller does not already wear the hat, and
    *     - caller is not in bad standing for the hat.
    */
-  function signAgreementAndClaimHat() public {
+  function signAgreementAndClaimHat(address _claimsHatter) public {
     uint256 agreementId = currentAgreementId; // save SLOADs
 
     // we need to set the claimer's agreement before minting so that they are eligible for the hat on minting
     claimerAgreements[msg.sender] = agreementId;
 
     /**
-     * @dev this call will revert if msg.sender...
-     *       - the hat is not "claimable-for"
-     *       - is currently wearing the hat, or
-     *       - is in bad standing for the hat
+     * @dev this call will revert if...
+     *       - the hat is not "claimable-for", or
+     *       - caller is currently wearing the hat, or
+     *       - caller is in bad standing for the hat
      */
-    MultiClaimsHatter(CLAIMS_HATTER()).claimHatFor(hatId(), msg.sender);
+    MultiClaimsHatter(_claimsHatter).claimHatFor(hatId(), msg.sender);
 
     emit AgreementEligibility_HatClaimedWithAgreement(msg.sender, hatId(), currentAgreement);
   }
@@ -198,7 +192,7 @@ contract AgreementEligibility is HatsEligibilityModule {
    * @notice Set a new agreement, with a grace period
    * @dev Only callable by a wearer of the `OWNER_HAT`
    * @param _agreement The new agreement, as a hash of the agreement plaintext (likely a CID)
-   * @param _grace The new grace period; must be at least `MIN_GRACE` seconds and end after the current grace period
+   * @param _grace The new grace period
    */
   function setAgreement(string calldata _agreement, uint256 _grace) public onlyOwner {
     uint256 _graceEndsAt = block.timestamp + _grace;
