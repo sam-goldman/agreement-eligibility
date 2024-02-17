@@ -34,9 +34,11 @@ contract AgreementEligibilityTest is Deploy, Test {
   event AgreementEligibility_AgreementSigned(address signer, string agreement);
   event AgreementEligibility_AgreementSet(string agreement, uint256 grace);
 
-  function setUp() public virtual {
+  function setUp() public virtual override {
+    super.setUp();
+
     // create and activate a fork, at BLOCK_NUMBER
-    fork = vm.createSelectFork(vm.rpcUrl("mainnet"), BLOCK_NUMBER);
+    fork = vm.createSelectFork(vm.rpcUrl("ethereum"), BLOCK_NUMBER);
 
     // deploy via the script
     Deploy.prepare(false, MODULE_VERSION); // set first param to true to log deployment addresses

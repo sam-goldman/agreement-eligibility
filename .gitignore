@@ -3,4 +3,5 @@ out/
 optimized-out/
 .vscode/
 broadcast/
+node_modules/
 .env
